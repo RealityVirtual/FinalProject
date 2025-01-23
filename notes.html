@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progress Point Team Notes</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #whiteboard {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: white;
+            border: 2px solid black;
+            cursor: none;
+        }
+        .text-input {
+            position: absolute;
+            font-size: 16px;
+            border: none;
+            outline: none;
+            background: transparent;
+        }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .color-btn, #eraser, #clear {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        #eraser {
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="grey"><path d="M16.24 2.93l4.83 4.83c.78.78.78 2.05 0 2.83L12.66 18.98c-.39.39-.9.59-1.41.59H5.41c-.51 0-1.02-.2-1.41-.59l-2.83-2.83c-.78-.78-.78-2.05 0-2.83l8.41-8.41c.78-.78 2.05-.78 2.83 0z"/></svg>') no-repeat center center;
+            background-size: 60%;
+        }
+        #clear {
+            background-color: red;
+            color: white;
+            width: auto;
+            border-radius: 10px;
+            padding: 0 10px;
+        }
+        #crosshair {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background-color: grey;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        #brush-size {
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <div id="whiteboard">
+        <div id="crosshair"></div>
+    </div>
+    <div id="controls">
+        <button class="color-btn" style="background-color: black;" data-color="black"></button>
+        <button class="color-btn" style="background-color: red;" data-color="red"></button>
+        <button class="color-btn" style="background-color: blue;" data-color="blue"></button>
+        <button class="color-btn" style="background-color: green;" data-color="green"></button>
+        <button id="eraser"></button>
+        <button id="clear">Clear</button>
+        <input type="range" id="brush-size" min="1" max="20" value="2">
+    </div>
+
+    <script>
+        const whiteboard = document.getElementById('whiteboard');
+        const ctxCanvas = document.createElement('canvas');
+        const ctx = ctxCanvas.getContext('2d');
+        ctxCanvas.width = whiteboard.offsetWidth;
+        ctxCanvas.height = whiteboard.offsetHeight;
+        ctxCanvas.style.position = 'absolute';
+        whiteboard.appendChild(ctxCanvas);
+
+        const crosshair = document.getElementById('crosshair');
+        const brushSizeSlider = document.getElementById('brush-size');
+        let drawing = false;
+        let currentColor = 'black';
+        let erasing = false;
+        let brushSize = parseInt(brushSizeSlider.value, 10);
+        let savedData = JSON.parse(localStorage.getItem('whiteboardData')) || { paths: [], texts: [] };
+
+        function restoreDrawing() {
+            ctx.clearRect(0, 0, ctxCanvas.width, ctxCanvas.height);
+            savedData.paths.forEach(path => {
+                ctx.beginPath();
+                ctx.lineWidth = path.width;
+                ctx.strokeStyle = path.color;
+                ctx.lineCap = 'round';
+                ctx.moveTo(path.points[0].x, path.points[0].y);
+                for (let point of path.points) {
+                    ctx.lineTo(point.x, point.y);
+                }
+                ctx.stroke();
+            });
+            savedData.texts.forEach(text => {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = text.value;
+                input.style.left = text.x + 'px';
+                input.style.top = text.y + 'px';
+                input.style.fontSize = `${text.fontSize}px`;
+                input.classList.add('text-input');
+                whiteboard.appendChild(input);
+            });
+        }
+
+        function autosave() {
+            const textElements = document.querySelectorAll('.text-input');
+            savedData.texts = Array.from(textElements).map(input => ({
+                value: input.value,
+                x: parseInt(input.style.left, 10),
+                y: parseInt(input.style.top, 10),
+                fontSize: parseInt(input.style.fontSize, 10)
+            }));
+            localStorage.setItem('whiteboardData', JSON.stringify(savedData));
+        }
+
+        whiteboard.addEventListener('mousedown', e => {
+            if (e.target !== ctxCanvas) {
+                if (erasing && e.target.classList.contains('text-input')) {
+                    savedData.texts = savedData.texts.filter(text => text.value !== e.target.value);
+                    e.target.remove();
+                }
+                return;
+            }
+            drawing = true;
+            const newPath = { width: brushSize, color: currentColor, points: [{ x: e.offsetX, y: e.offsetY }] };
+            savedData.paths.push(newPath);
+        });
+
+        whiteboard.addEventListener('mousemove', e => {
+            crosshair.style.left = `${e.pageX - brushSize / 2}px`;
+            crosshair.style.top = `${e.pageY - brushSize / 2}px`;
+            crosshair.style.width = `${brushSize}px`;
+            crosshair.style.height = `${brushSize}px`;
+
+            if (!drawing) return;
+            const currentPath = savedData.paths[savedData.paths.length - 1];
+            currentPath.points.push({ x: e.offsetX, y: e.offsetY });
+
+            ctx.lineWidth = currentPath.width;
+            ctx.strokeStyle = currentPath.color;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            const lastPoint = currentPath.points[currentPath.points.length - 2];
+            ctx.moveTo(lastPoint.x, lastPoint.y);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.stroke();
+        });
+
+        whiteboard.addEventListener('mouseup', () => { drawing = false; });
+
+        whiteboard.addEventListener('dblclick', e => {
+            if (e.target !== ctxCanvas) return;
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.style.left = e.offsetX + 'px';
+            input.style.top = e.offsetY + 'px';
+            input.style.fontSize = `${Math.max(12, Math.min(26, brushSize * 3))}px`;
+            input.classList.add('text-input');
+            whiteboard.appendChild(input);
+            input.focus();
+        });
+
+        document.getElementById('controls').addEventListener('click', e => {
+            if (e.target.classList.contains('color-btn')) {
+                currentColor = e.target.getAttribute('data-color');
+                erasing = false;
+            } else if (e.target.id === 'eraser') {
+                currentColor = 'white';
+                erasing = true;
+            } else if (e.target.id === 'clear') {
+                savedData = { paths: [], texts: [] };
+                ctx.clearRect(0, 0, ctxCanvas.width, ctxCanvas.height);
+                document.querySelectorAll('.text-input').forEach(input => input.remove());
+                localStorage.setItem('whiteboardData', JSON.stringify(savedData));
+            }
+        });
+
+        brushSizeSlider.addEventListener('input', () => {
+            brushSize = parseInt(brushSizeSlider.value, 10);
+        });
+
+        window.addEventListener('beforeunload', autosave);
+        setInterval(autosave, 2000);
+
+        restoreDrawing();
+    </script>
+</body>
+</html>
