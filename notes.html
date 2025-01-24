@@ -91,9 +91,16 @@
         const brushSizeSlider = document.getElementById('brush-size');
         let drawing = false;
         let currentColor = 'black';
-        let erasing = false;
         let brushSize = parseInt(brushSizeSlider.value, 10);
         let savedData = JSON.parse(localStorage.getItem('whiteboardData')) || { paths: [], texts: [] };
+
+        // Added enumeration for tools
+        const ToolType = {
+            DRAW: 'draw',
+            ERASE: 'erase',
+            TEXT: 'text'
+        };
+        let currentTool = ToolType.DRAW; // Default tool
 
         function restoreDrawing() {
             ctx.clearRect(0, 0, ctxCanvas.width, ctxCanvas.height);
@@ -133,7 +140,7 @@
 
         whiteboard.addEventListener('mousedown', e => {
             if (e.target !== ctxCanvas) {
-                if (erasing && e.target.classList.contains('text-input')) {
+                if (currentTool === ToolType.ERASE && e.target.classList.contains('text-input')) {
                     savedData.texts = savedData.texts.filter(text => text.value !== e.target.value);
                     e.target.remove();
                 }
@@ -181,10 +188,10 @@
         document.getElementById('controls').addEventListener('click', e => {
             if (e.target.classList.contains('color-btn')) {
                 currentColor = e.target.getAttribute('data-color');
-                erasing = false;
+                currentTool = ToolType.DRAW;
             } else if (e.target.id === 'eraser') {
                 currentColor = 'white';
-                erasing = true;
+                currentTool = ToolType.ERASE;
             } else if (e.target.id === 'clear') {
                 savedData = { paths: [], texts: [] };
                 ctx.clearRect(0, 0, ctxCanvas.width, ctxCanvas.height);
