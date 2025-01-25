@@ -12,26 +12,36 @@ public class Todo {
     private JProgressBar progressBar;
     private JLabel label;
 
-    private int x = 4;
-    private int y = 10;
+    private int x = 0;
+    private int y = 100;
 
     private final String fileName;
     private final JFrame frame;
-    private final DefaultListModel<String> listModel;
-    private final JList<String> list;
+    private final DefaultListModel<Task> listModel;
+    private final JList<Task> list;
+    private final MainMenu main;
+    
+    private String name;
 
     // Constructor
-    public Todo(String fileName) {
+    public Todo(String fileName, String theName, MainMenu mainMenu, boolean isLoaded) {
         this.fileName = fileName;
+        this.name = theName;
+        this.main = mainMenu;
         frame = new JFrame("To-Do List");
         listModel = new DefaultListModel<>();
         list = new JList<>(listModel);
         loadList();
         setupGUI();
+        
+        if(!isLoaded)
+            saveList();
+        frame.setVisible(false);
     }
-
+    
+    //set up the to do GUI components, panel at the bottom
     private void setupGUI() {
-        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(1000, 600);
 
         // Set a custom font for the entire app
@@ -51,7 +61,7 @@ public class Todo {
                 int width = getWidth();
                 int height = getHeight();
 
-                GradientPaint gp = new GradientPaint(0, 0, Color.LIGHT_GRAY, width, height, Color.WHITE);
+                GradientPaint gp = new GradientPaint(0, 0, Color.BLACK, width, height, Color.WHITE);
                 g2d.setPaint(gp);
                 g2d.fillRect(0, 0, width, height);
             }
@@ -72,7 +82,7 @@ public class Todo {
                 int width = getWidth();
                 int height = getHeight();
                 
-                GradientPaint gp = new GradientPaint(0, 0, new Color(240, 128, 128), width, height, Color.PINK);
+                GradientPaint gp = new GradientPaint(0, 0, new Color(255, 215, 0), width, height, new Color(255, 215, 0));
                 g2d.setPaint(gp);
                 g2d.fillRect(0, 0, width, height);
             }
@@ -82,18 +92,22 @@ public class Todo {
         // Create custom rounded buttons
         JButton addButton = createCustomButton("Add Item");
         JButton deleteButton = createCustomButton("Delete Item");
+        JButton editButton = createCustomButton("Edit Item");
         JButton checkButton = createCustomButton("Check/Uncheck");
+        JButton backButton = createCustomButton("Main Menu");
 
         buttonPanel.add(addButton);
         buttonPanel.add(deleteButton);
+        buttonPanel.add(editButton);
         buttonPanel.add(checkButton);
+        buttonPanel.add(backButton);
 
         panel.add(buttonPanel, BorderLayout.SOUTH);
         frame.add(panel);
 
         // Progress bar section
         progressBar = new JProgressBar(0, y);
-        progressBar.setValue(x);
+        progressBar.setValue((int)(((double)checkProgress() / listModel.size()) * 100));
         progressBar.setStringPainted(true);
         
         JPanel progressPanel = new JPanel(new BorderLayout());
@@ -104,31 +118,63 @@ public class Todo {
         label.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
         progressPanel.add(label, BorderLayout.NORTH);
 
-        JButton updateButton = createCustomButton("Update Progress");
-        updateButton.addActionListener(e -> updateProgress(x + 1));
-        progressPanel.add(updateButton, BorderLayout.SOUTH);
+        //JButton updateButton = createCustomButton("Update Progress");
+        //updateButton.addActionListener(e -> updateProgress());
+        //progressPanel.add(updateButton, BorderLayout.SOUTH);
 
         panel.add(progressPanel, BorderLayout.NORTH);
 
         // Button Actions
         addButton.addActionListener(e -> addItem());
         deleteButton.addActionListener(e -> deleteItem());
+        editButton.addActionListener(e -> editItem());
         checkButton.addActionListener(e -> toggleCheckItem());
+
+        backButton.addActionListener(e -> {
+           frame.setVisible(false);
+           main.show();
+        });
 
         frame.setVisible(true);
     }
-
-    public void updateProgress(int newX) {
-        
-        if (newX <= y) {
-            x = newX;
-            progressBar.setValue(x);
-            label.setText("Progress: " + x + "/" + y);
-        } else {
-            JOptionPane.showMessageDialog(null, "Value cannot exceed " + y, "Error", JOptionPane.ERROR_MESSAGE);
+    
+    //retrieve the name of the member
+    public String getName()
+    {
+        return this.name;
+    }
+    
+    //set the name
+    public void setName(String newName)
+    {
+        this.name = newName;
+    }
+    
+    //get progress of the tasks
+    public int getProgress()
+    {
+        return (int)(((double)checkProgress() / listModel.size()) * 100);
+    }
+    
+    //check number of completed task
+    private int checkProgress()
+    {
+        int tasksComplete = 0;
+        for (int i = 0; i < listModel.size(); i++){
+            if (listModel.get(i).isCompleted()){
+                tasksComplete++;
+            }
         }
+        return tasksComplete;
+    }
+    
+    public void updateProgress() {
+        x = (int)(((double)checkProgress() / listModel.size()) * 100);
+        progressBar.setValue(x);
+        label.setText("Progress: " + x + "/" + y);
     }
 
+    //
     private JButton createCustomButton(String text) {
         JButton button = new JButton(text) {
             @Override
@@ -139,7 +185,7 @@ public class Todo {
                 int height = getHeight();
 
                 // Draw gradient background
-                GradientPaint gp = new GradientPaint(0, 0, Color.ORANGE, width, height, Color.YELLOW);
+                GradientPaint gp = new GradientPaint(0, 0, Color.WHITE, width, height, Color.WHITE);
                 g2d.setPaint(gp);
                 g2d.fillRoundRect(0, 0, width, height, 20, 20);
 
@@ -171,7 +217,9 @@ public class Todo {
     private void addItem() {
         String newItem = JOptionPane.showInputDialog(frame, "Enter a new to-do item:", "Add Item", JOptionPane.PLAIN_MESSAGE);
         if (newItem != null && !newItem.trim().isEmpty()) {
-            listModel.addElement(newItem);
+            Task newTask = new Task(newItem);
+            listModel.addElement(newTask);
+            updateProgress();
             saveList();
         }
     }
@@ -180,35 +228,63 @@ public class Todo {
         int selectedIndex = list.getSelectedIndex();
         if (selectedIndex != -1) {
             listModel.remove(selectedIndex);
+            updateProgress();
             saveList();
         } else {
             JOptionPane.showMessageDialog(frame, "Please select an item to delete.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
+    
+    private void editItem() {
+        int selectedIndex = list.getSelectedIndex();
+        if (selectedIndex != -1) {
+            Task currentTask = listModel.getElementAt(selectedIndex);
+            String newDescription = JOptionPane.showInputDialog(frame, "Edit the item:", currentTask.getDescription());
+            if (newDescription != null && !newDescription.trim().isEmpty()){
+                currentTask.setDescription(newDescription);
+                listModel.set(selectedIndex, currentTask);
+                saveList();
+            }
+        }
+        else {
+                JOptionPane.showMessageDialog(frame, "Please select an item to edit.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+    }
 
     private void toggleCheckItem() {
         int selectedIndex = list.getSelectedIndex();
         if (selectedIndex != -1) {
-            String item = listModel.getElementAt(selectedIndex);
-            if (item.startsWith("[X] ")) {
-                item = item.substring(4); // Uncheck
-            } else {
-                item = "[X] " + item; // Check
-            }
-            listModel.set(selectedIndex, item);
+            Task selectTask = listModel.getElementAt(selectedIndex);
+            selectTask.setCompleted(!selectTask.isCompleted());
+            listModel.set(selectedIndex, selectTask);
+            updateProgress();
             saveList();
         } else {
             JOptionPane.showMessageDialog(frame, "Please select an item to check/uncheck.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
+    public String getTheFileName()
+    {
+        return this.fileName;
+    }
+
+    
     private void loadList() {
         File file = new File(fileName);
         if (file.exists()) {
             try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
                 String line;
-                while ((line = reader.readLine()) != null) {
-                    listModel.addElement(line);
+                reader.readLine();
+                reader.readLine();
+                while((line = reader.readLine()) != null) {
+                    if (!line.trim().isEmpty()){
+                        boolean isTaskComplete = line.startsWith("[X]");
+                        String taskDescription = line.replaceAll("\\[X\\] ", "").replaceAll("\\[ \\] ", "").trim();
+                        Task task = new Task(taskDescription);
+                        task.setCompleted(isTaskComplete);
+                        listModel.addElement(task);
+                    }
                 }
             } catch (IOException e) {
                 JOptionPane.showMessageDialog(frame, "Error loading list: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -216,14 +292,27 @@ public class Todo {
         }
     }
 
-    private void saveList() {
+    //save the list
+    public void saveList() {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName))) {
+                writer.write(this.name);
+                writer.newLine();
+                writer.newLine();
             for (int i = 0; i < listModel.size(); i++) {
-                writer.write(listModel.getElementAt(i));
+                Task task = listModel.getElementAt(i);
+                if(task.isCompleted())
+                    writer.write("[X] ");
+                else
+                    writer.write("[ ] ");
+                writer.write(task.getDescription());
                 writer.newLine();
             }
         } catch (IOException e) {
             JOptionPane.showMessageDialog(frame, "Error saving list: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+    
+    public void show() {
+        frame.setVisible(true);
     }
 }
